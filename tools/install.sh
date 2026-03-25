@@ -70,7 +70,7 @@ sudo apt-get install -y gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0
 QGC_DIR="$HOME/QGroundControl"
 mkdir -p "$QGC_DIR"
 if [ ! -f "$QGC_DIR/QGroundControl.AppImage" ]; then
-    wget https://d176tv9ibo4jno.cloudfront.net/latest/QGroundControl.AppImage -O "$QGC_DIR/QGroundControl.AppImage"
+    wget https://github.com/mavlink/qgroundcontrol/releases/latest/download/QGroundControl.AppImage -O "$QGC_DIR/QGroundControl.AppImage"
     chmod +x "$QGC_DIR/QGroundControl.AppImage"
     echo -e "${GREEN}Pobrano QGroundControl do $QGC_DIR${NC}"
 else
