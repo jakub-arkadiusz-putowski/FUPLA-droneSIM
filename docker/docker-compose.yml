@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  dev_env:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - USER_UID=${UID:-1000}
+        - USER_GID=${GID:-1000}
+    image: fupla-dronesim-dev:latest
+    container_name: fupla_dev
+    # Tryb hosta dla łatwego mapowania portów mavlink i ROS 2 DDS
+    network_mode: "host"
+    privileged: true
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      # Mapowanie gniazda X11 dla GUI (Gazebo, QGC)
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Mapowanie samego repozytorium do katalogu /workspace w kontenerze
+      - ../:/workspace
+      # Mapowanie urządzeń wideo i wejścia (joystick)
+      - /dev:/dev
+    stdin_open: true
+    tty: true
+    command: /bin/bash
