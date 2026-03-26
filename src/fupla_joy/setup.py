@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'node_joy_to_rc = fupla_joy.node_joy_to_rc:main'
         ],
     },
 )
