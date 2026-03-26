@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'node_mavlink_hub = fupla_mavlink.node_mavlink_hub:main'
         ],
     },
 )
