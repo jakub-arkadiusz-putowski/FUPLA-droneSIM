@@ -70,13 +70,13 @@ sudo apt-get install -y gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0
 QGC_DIR="$HOME/QGroundControl"
 mkdir -p "$QGC_DIR"
 if [ ! -f "$QGC_DIR/QGroundControl.AppImage" ]; then
-    wget https://github.com/mavlink/qgroundcontrol/releases/latest/download/QGroundControl.AppImage -O "$QGC_DIR/QGroundControl.AppImage"
+    wget https://github.com/mavlink/qgroundcontrol/releases/download/v4.3.0/QGroundControl.AppImage -O "$QGC_DIR/QGroundControl.AppImage"
     chmod +x "$QGC_DIR/QGroundControl.AppImage"
     echo -e "${GREEN}Pobrano QGroundControl do $QGC_DIR${NC}"
 else
     echo -e "${GREEN}QGroundControl już istnieje w systemie.${NC}"
 fi
-sudo usermod -a -G dialout $USER
+sudo usermod -a -G dialout $(whoami)
 
 # 8. Wstępna kompilacja symulacji
 echo -e "${BLUE}[7/7] Pierwsza kompilacja PX4 i drona (to może potrwać kilka minut!)...${NC}"
