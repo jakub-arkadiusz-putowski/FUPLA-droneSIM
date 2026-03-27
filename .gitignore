@@ -6,6 +6,8 @@ log/
 
 # Python
 __pycache__/
+*.pyc
+.pytest_cache/
 *.py[cod]
 *$py.class
 
@@ -28,3 +30,5 @@ Thumbs.db
 
 # Docker (opcjonalnie, zależy czy chcesz trzymać build cache)
 .docker/
+
+external/PX4-Autopilot/build/
