@@ -16,12 +16,12 @@
 
  ## Installation
 
- bash```
+ ```bash
  git clone --recursive https://github.com/jakub-arkadiusz-putowski/FUPLA-droneSIM.git
  cd FUPLA-droneSIM
  chmod +x tools/install.sh
  ```
- bash``` tools/install.sh
+ ```bash tools/install.sh
  > Note: Open a new terminal after installation to reload the environment.
  ```
  
@@ -29,7 +29,7 @@
 
  ### 1. Launch simulation (Master drone + Gazebo server + QGC + DDS Agent)
 
- bash```
+ ```bash
  # Standard quadrotor
  ros2 launch fupla_bringup sim.launch.py
 
@@ -39,7 +39,7 @@
 
  ### 2. Add more drones (each in a separate terminal)
 
- bash```
+ ```bash
  # Drone 2 - standard quadrotor
  ros2 launch fupla_bringup add_drone.launch.py id:=2 model:=gz_x500 pose:='2,0,0.2,0,0,0'
 
@@ -49,7 +49,7 @@
 
  ### 3. RC control via Futaba T8J
 
- bash```
+ ```bash
  # Terminal 1: start joystick driver
  ros2 run joy joy_node --ros-args -p device_id:=0
 
@@ -62,7 +62,7 @@
 
  ### 4. Video stream to QGroundControl
 
- bash```
+ ```bash
  # Drone 1 camera (default topic and port)
  ros2 run fupla_joy stream_to_qgc
 
