@@ -1,12 +1,40 @@
 <?xml version="1.0"?>
-<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd"
+            schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>fupla_joy</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="developer@todo.todo">developer</maintainer>
-  <license>TODO: License declaration</license>
+  <version>1.0.0</version>
 
+  <description>
+    FUPLA-droneSIM joystick and video streaming package.
+    Provides two nodes:
+      - node_joy_to_rc: Translates Futaba T8J joystick input to MAVLink
+                        RC_CHANNELS_OVERRIDE commands for PX4 SITL control.
+      - stream_to_qgc:  Re-encodes ROS 2 camera images as H.264/RTP and
+                        streams them to QGroundControl via UDP port 5600.
+  </description>
+
+  <maintainer email="developer@fupla.dev">FUPLA Developer</maintainer>
+  <license>Apache-2.0</license>
+
+  <!-- Core ROS 2 Python client library -->
+  <depend>rclpy</depend>
+
+  <!-- Joy message type: sensor_msgs/Joy (published by ros2 joy_node) -->
+  <depend>sensor_msgs</depend>
+
+  <!-- ROS 2 <-> OpenCV image conversion bridge -->
+  <depend>python3-cv-bridge</depend>
+
+  <!-- MAVLink communication library (pymavlink) -->
+  <!-- Installed via pip: pip3 install pymavlink -->
+  <!-- Declared here for documentation; not resolved by rosdep on Ubuntu 22.04 -->
+  <exec_depend>python3-pymavlink</exec_depend>
+
+  <!-- OpenCV Python bindings (used by stream_to_qgc for GStreamer pipeline) -->
+  <exec_depend>python3-opencv</exec_depend>
+
+  <!-- Test dependencies -->
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

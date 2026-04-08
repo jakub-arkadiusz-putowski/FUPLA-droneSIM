@@ -1,53 +1,97 @@
 """
-FUPLA-droneSIM: Scalability Extension
--------------------------------------
-Industrial-grade script for dynamic UAV fleet scaling.
-Uses the 'STANDALONE' flag to attach new instances to an existing Gazebo server.
+FUPLA-droneSIM: Dynamic Drone Spawner
+======================================
+Adds a new PX4 SITL drone instance to the already-running simulation.
+Each drone runs in its own gnome-terminal window for independent monitoring.
 
-This block replicates the manual command:
-PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE="0,1" PX4_SIM_MODEL=gz_x500 ./build/px4_sitl_default/bin/px4 -i 2
+Prerequisites:
+    - sim.launch.py must be running (Gazebo server + DDS Agent must be active).
+
+Usage:
+    ros2 launch fupla_bringup add_drone.launch.py id:=2
+    ros2 launch fupla_bringup add_drone.launch.py id:=2 model:=gz_x500_depth pose:='2,0,0.2,0,0,0'
+    ros2 launch fupla_bringup add_drone.launch.py id:=3 model:=gz_x500 pose:='-2,0,0.2,0,0,0'
+
+Notes:
+    - 'id' must be unique and >= 2 (ID=1 is reserved for the master drone).
+    - Each ID offsets MAVLink UDP port: id=2 → port 14541, id=3 → 14542, etc.
+    - PX4_GZ_STANDALONE=1 is set automatically by run_px4_instance.sh for id >= 2.
 """
 
 import os
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess, DeclareLaunchArgument, OpaqueFunction
+from launch.actions import (
+    DeclareLaunchArgument,
+    ExecuteProcess,
+    OpaqueFunction,
+)
 from launch.substitutions import LaunchConfiguration
 
+
 def launch_setup(context, *args, **kwargs):
+    """
+    Resolves launch arguments and constructs the drone spawn command.
+    OpaqueFunction is required to evaluate LaunchConfiguration values at runtime.
+    """
     drone_id = LaunchConfiguration('id').perform(context)
-    model = LaunchConfiguration('model').perform(context)
-    
-    # Path Resolution
-    current_dir = os.path.dirname(__file__)
-    repo_root = current_dir
-    while repo_root != '/' and not os.path.exists(os.path.join(repo_root, 'external', 'PX4-Autopilot')):
-        repo_root = os.path.dirname(repo_root)
-    
-    px4_dir = os.path.join(repo_root, 'external', 'PX4-Autopilot')
-    px4_binary = './build/px4_sitl_default/bin/px4'
+    model    = LaunchConfiguration('model').perform(context)
+    pose     = LaunchConfiguration('pose').perform(context)
 
-    # Automatic Pose Calculation: Places new drones on a grid (offset by 1 meter per ID)
-    y_pos = str(int(drone_id) - 1)
+    # --- Validation -----------------------------------------------------------
+    try:
+        drone_id_int = int(drone_id)
+    except ValueError:
+        raise ValueError(f"[add_drone.launch.py] 'id' must be an integer, got: '{drone_id}'")
 
-    # Secondary PX4 Instance (Instance N):
-    # Logic: PX4_GZ_STANDALONE=1 forces the instance to join the current Gazebo partition.
-    add_drone = ExecuteProcess(
-        cmd=[px4_binary, '-i', drone_id],
-        cwd=px4_dir,
-        additional_env={
-            'PX4_GZ_STANDALONE': '1',        # Crucial for multi-vehicle integration
-            'PX4_SYS_AUTOSTART': '4001',
-            'PX4_GZ_MODEL_POSE': f'0,{y_pos}',
-            'PX4_SIM_MODEL': model,          # Allows mixing drone types (e.g. x500 and VTOL)
-        },
-        output='screen'
+    if drone_id_int < 2:
+        raise ValueError(
+            f"[add_drone.launch.py] Drone ID must be >= 2. "
+            f"ID=1 is reserved for the master drone (sim.launch.py). Got: {drone_id}"
+        )
+
+    # --- Path Resolution ------------------------------------------------------
+    this_file_dir = os.path.dirname(os.path.realpath(__file__))
+    repo_root = os.path.abspath(os.path.join(this_file_dir, '..', '..', '..', '..'))
+    run_script = os.path.join(repo_root, 'tools', 'run_px4_instance.sh')
+
+    if not os.path.isfile(run_script):
+        raise FileNotFoundError(
+            f"[add_drone.launch.py] run_px4_instance.sh not found at: {run_script}\n"
+            f"Please ensure tools/run_px4_instance.sh exists in the repository."
+        )
+
+    # --- Process Definition ---------------------------------------------------
+    drone = ExecuteProcess(
+        cmd=[
+            'gnome-terminal',
+            f'--title=PX4 | Drone {drone_id} | {model}',
+            '--',
+            'bash', '-c',
+            f'bash {run_script} {drone_id} {model} "{pose}"; exec bash'
+        ],
+        output='screen',
+        name=f'px4_drone_{drone_id}',
     )
-    
-    return [add_drone]
+
+    return [drone]
+
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('id', default_value='2', description='Unique instance ID'),
-        DeclareLaunchArgument('model', default_value='gz_x500', description='UAV Model'),
-        OpaqueFunction(function=launch_setup)
+        DeclareLaunchArgument(
+            'id',
+            default_value='2',
+            description='Unique drone instance ID. Must be >= 2. ID=1 is reserved for master.'
+        ),
+        DeclareLaunchArgument(
+            'model',
+            default_value='gz_x500',
+            description='PX4 Gazebo model. Options: gz_x500, gz_x500_depth'
+        ),
+        DeclareLaunchArgument(
+            'pose',
+            default_value='2,0,0.2,0,0,0',
+            description='Spawn pose: "x,y,z,roll,pitch,yaw"'
+        ),
+        OpaqueFunction(function=launch_setup),
     ])
