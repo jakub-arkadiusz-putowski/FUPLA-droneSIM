@@ -4,7 +4,7 @@
  Built on native Ubuntu 22.04 with ROS 2 Humble, PX4 SITL, and Gazebo.
 
  ## Stack
-
+```text
  | Component | Version |
  |---|---|
  | OS | Ubuntu 22.04 LTS (native) |
@@ -13,7 +13,7 @@
  | Simulator | Gazebo Garden/Harmonic |
  | GCS | QGroundControl v4.3.0 |
  | RC Transmitter | Futaba T8J (USB/PPM) |
-
+```
  ## Installation
 
  ```bash
@@ -74,7 +74,7 @@
 
  ## Architecture
 
-
+```text
  +-------------------------------------------------------------+
  | FUPLA-droneSIM |
  +----------------+---------------+----------------------------+
@@ -92,27 +92,28 @@
  | QGroundControl |
  | Futaba T8J (USB) |
  +--------------------+
-
+```
 
  ## Port Reference
-
+```text
  | Service | Port | Protocol |
  |---|---|---|
  | Micro-XRCE-DDS Agent | 8888 | UDP |
  | PX4 MAVLink drone 1 | 14540 | UDP |
  | PX4 MAVLink drone N | 14540 + (N-1) | UDP |
  | QGC Video stream | 5600 | UDP/RTP |
+```
 
  ## Supported Models
-
+```text
  | Model | PX4 Autostart | Description |
  |---|---|---|
  | gz_x500 | 4001 | Standard quadrotor |
  | gz_x500_depth | 4002 | Quadrotor with Intel RealSense depth camera |
+```
 
  ## Repository Structure
-
-
+```text
  FUPLA-droneSIM/
  +-- external/PX4-Autopilot/ # PX4 firmware (git submodule)
  +-- src/
@@ -127,3 +128,4 @@
  +-- tools/
  +-- install.sh # One-command environment installer
  +-- run_px4_instance.sh # PX4 SITL instance launcher
+```
