@@ -88,6 +88,7 @@ if [ ! -f "$REPO_ROOT/external/PX4-Autopilot/CMakeLists.txt" ]; then
     exit 1
 fi
 
+
 if [! -f "$REPO_ROOT/src/px4_msgs/package.xml" ]; then
     print_error "px4_msgs submodule is not initialized."
     print_errot "please run: git submodule update --init --recursive"
