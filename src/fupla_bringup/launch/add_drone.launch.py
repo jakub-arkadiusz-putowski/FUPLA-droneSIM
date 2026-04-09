@@ -51,7 +51,7 @@ def launch_setup(context, *args, **kwargs):
 
     # --- Path Resolution ------------------------------------------------------
     this_file_dir = os.path.dirname(os.path.realpath(__file__))
-    repo_root = os.path.abspath(os.path.join(this_file_dir, '..', '..', '..', '..'))
+    repo_root = _find_repo_root()
     run_script = os.path.join(repo_root, 'tools', 'run_px4_instance.sh')
 
     if not os.path.isfile(run_script):
@@ -62,13 +62,7 @@ def launch_setup(context, *args, **kwargs):
 
     # --- Process Definition ---------------------------------------------------
     drone = ExecuteProcess(
-        cmd=[
-            'gnome-terminal',
-            f'--title=PX4 | Drone {drone_id} | {model}',
-            '--',
-            'bash', '-c',
-            f'bash {run_script} {drone_id} {model} "{pose}"; exec bash'
-        ],
+        cmd=['bash', run_script, drone_id, model, pose],
         output='screen',
         name=f'px4_drone_{drone_id}',
     )
