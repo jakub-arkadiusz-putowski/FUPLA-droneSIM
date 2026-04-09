@@ -78,12 +78,24 @@ fi
 print_ok "OS verified: Ubuntu 22.04 LTS"
 
 # --- Check: Git submodules ----------------------------------------------------
+#verify that all required submodules are initialized before proceeding.
+#required submodules are:
+# - external/PX4-Autopilot:     px4 firmware and gazebo models
+# - src/px4_msgs:               ros2 message definitions for px4 uORB topics
 if [ ! -f "$REPO_ROOT/external/PX4-Autopilot/CMakeLists.txt" ]; then
     print_error "PX4-Autopilot submodule is not initialized."
     print_error "Please run: git submodule update --init --recursive"
     exit 1
 fi
-print_ok "Git submodules verified"
+
+if [! -f "$REPO_ROOT/src/px4_msgs/package.xml" ]; then
+    print_error "px4_msgs submodule is not initialized."
+    print_errot "please run: git submodule update --init --recursive"
+    exit 1
+
+fi
+
+print_ok "Git submodules verified (PX4-Autopilot, px4_msgs)"
 
 # --- Check: Not running as root -----------------------------------------------
 if [ "$EUID" -eq 0 ]; then
