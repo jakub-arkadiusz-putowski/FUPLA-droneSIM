@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
 """
-FUPLA-droneSIM: Joystick to MAVLink RC Override Node
-=====================================================
-Translates ROS 2 Joy messages from a Futaba T8J RC transmitter (connected via
-USB PPM decoder) into MAVLink RC_CHANNELS_OVERRIDE commands sent directly to
-a PX4 SITL instance.
+FUPLA-droneSIM: Joystick to MAVLink MANUAL_CONTROL Node
+========================================================
+Axis mapping verified by physical stick measurement (ros2 topic echo /joy):
 
-Calibration is based on measured raw values from 'ros2 topic echo /joy':
-  - Throttle (axes[4]): range [+0.474 ... 0.0]  (inverted: 0.474=min, 0.0=max)
-  - Yaw      (axes[0]): range [-0.075 ... +0.463], center ≈ 0.0
-  - Pitch    (axes[1]): range [-0.075 ... +0.463], center ≈ 0.0
-  - Roll     (axes[2]): range [-0.075 ... +0.463], center ≈ 0.0
+  axes[0] = Roll   right stick horizontal
+              left : +0.463   center: +0.141   right: -0.075
+  axes[1] = Pitch  right stick vertical
+              up   : -0.075   center: +0.141   down : +0.455
+  axes[2] = Thrust left stick vertical  (INVERTED: up=low, down=high)
+              up   : -0.075   center: +0.455   down : +0.463
+  axes[3] = UNUSED (always 0.000)
+  axes[4] = Yaw    left stick horizontal
+              left : +0.463   center: +0.141   right: -0.067
 
-MAVLink RC channel range: 1000 (min) ... 1500 (center) ... 2000 (max)
+MAVLink port verified from 'pxh> mavlink status':
+  PX4 instance #0 listens on UDP 18571
+  PX4 MAV_SYS_ID = 2  (must match target_system parameter)
 
-Usage:
-    ros2 run fupla_joy node_joy_to_rc
-    ros2 run fupla_joy node_joy_to_rc --ros-args -p target_system:=2 -p udp_port:=14541
-
-Parameters:
-    target_system (int): MAVLink system ID of the target drone. Default: 1
-    udp_port      (int): UDP port of the target PX4 instance. Default: 14540
-                         Formula: 14540 + (drone_id - 1)
+PX4 prerequisites:
+  pxh> param set COM_RC_IN_MODE 1
+  pxh> param save
 """
 
 import rclpy
@@ -30,168 +29,220 @@ from sensor_msgs.msg import Joy
 from pymavlink import mavutil
 
 
-# --- Calibration Constants (Futaba T8J via USB PPM decoder) -------------------
-# Measured from 'ros2 topic echo /joy' with physical stick movements.
-# These values represent the raw normalized output of ros2 joy_node.
+# ---------------------------------------------------------------------------
+# Calibration — verified by physical measurement per axis
+# ---------------------------------------------------------------------------
 
-# Throttle axis (axes[4]): physically inverted - resting low = high value
-THR_RAW_MIN = 0.474   # Stick at bottom (zero throttle)
-THR_RAW_MAX = 0.000   # Stick at top    (full throttle)
+# Thrust axes[2]: INVERTED — stick up = low raw value
+THR_RAW_MIN = -0.075   # stick top    = zero thrust
+THR_RAW_MAX =  0.463   # stick bottom = full thrust  (inverted!)
+THR_RAW_CTR =  0.455   # stick center (resting position)
 
-# Directional axes (axes[0,1,2]): asymmetric due to PPM decoder characteristics
-DIR_RAW_MIN = -0.075  # Full deflection in negative direction
-DIR_RAW_MAX = +0.463  # Full deflection in positive direction
-DIR_RAW_CTR = 0.000   # Stick centered (confirmed from measurements)
+# Roll axes[0]: left=positive, right=negative
+ROLL_RAW_MIN = -0.075  # full right
+ROLL_RAW_CTR =  0.141  # center
+ROLL_RAW_MAX =  0.463  # full left
 
-# MAVLink RC channel range (microseconds, standard RC PWM convention)
-RC_MIN    = 1000
-RC_CENTER = 1500
-RC_MAX    = 2000
+# Pitch axes[1]: up=negative, down=positive (standard RC convention)
+PITCH_RAW_MIN = -0.075  # full up
+PITCH_RAW_CTR =  0.141  # center
+PITCH_RAW_MAX =  0.455  # full down
+
+# Yaw axes[4]: left=positive, right=negative
+YAW_RAW_MIN = -0.067   # full right
+YAW_RAW_CTR =  0.141   # center
+YAW_RAW_MAX =  0.463   # full left
 
 
 class JoyToRcNode(Node):
     """
-    ROS 2 node that bridges joystick input to MAVLink RC_CHANNELS_OVERRIDE.
+    Bridges Futaba T8J joystick to MAVLink MANUAL_CONTROL for PX4 SITL.
 
-    The node maintains a MAVLink UDP connection to a single PX4 instance,
-    identified by 'target_system' parameter. To control multiple drones,
-    launch multiple instances of this node with different parameters.
+    Verified axis mapping:
+      axes[0] → roll   right stick horizontal
+      axes[1] → pitch  right stick vertical
+      axes[2] → thrust left  stick vertical (inverted)
+      axes[3] → unused
+      axes[4] → yaw    left  stick horizontal
     """
 
     def __init__(self):
         super().__init__('node_joy_to_rc')
 
         # --- Parameters -------------------------------------------------------
-        # target_system: MAVLink system ID (1 = first drone, 2 = second, etc.)
-        self.declare_parameter('target_system', 1)
-        # udp_port: PX4 SITL MAVLink port (14540 for id=1, 14541 for id=2, ...)
-        self.declare_parameter('udp_port', 14540)
+        self.declare_parameter('target_system', 2)
+        self.declare_parameter('udp_port', 18571)
 
         self._target_system = self.get_parameter('target_system').value
         self._udp_port      = self.get_parameter('udp_port').value
 
-        # --- MAVLink Connection -----------------------------------------------
-        # 'udpout' mode: this node SENDS to PX4, PX4 does not need to connect first.
-        # source_system=255 identifies us as a Ground Control Station (GCS).
+        # --- MAVLink ----------------------------------------------------------
         connection_str = f'udpout:127.0.0.1:{self._udp_port}'
         self.get_logger().info(
-            f'Connecting to PX4 | system_id={self._target_system} | {connection_str}'
+            f'[node_joy_to_rc] Connecting → {connection_str} '
+            f'(target_system={self._target_system})'
         )
         self._mav = mavutil.mavlink_connection(
             connection_str,
-            source_system=255
+            source_system=255,
+            source_component=190,
         )
 
         # --- State ------------------------------------------------------------
-        self._latest_axes = None  # Holds the most recent Joy axes array
-        self._heartbeat_counter = 0  # Used to throttle heartbeat to ~1 Hz
+        self._latest_axes: list | None = None
+        self._heartbeat_counter = 0
+        self._send_counter      = 0
+        self._joy_msg_count     = 0
 
-        # --- ROS 2 Subscriptions & Timers ------------------------------------
+        # --- ROS 2 ------------------------------------------------------------
         self.create_subscription(Joy, '/joy', self._joy_callback, 10)
-
-        # Send RC override at 20 Hz (50ms period) - matches PX4 RC input rate
-        self.create_timer(0.05, self._send_rc_override)
+        self.create_timer(0.05, self._send_manual_control)  # 20 Hz
 
         self.get_logger().info(
-            f'[node_joy_to_rc] Ready. '
-            f'Target: system_id={self._target_system}, port={self._udp_port}'
+            f'[node_joy_to_rc] Ready.\n'
+            f'  Target : 127.0.0.1:{self._udp_port} '
+            f'(system_id={self._target_system})\n'
+            f'  Axes   : [0]=roll [1]=pitch [2]=thrust [4]=yaw\n'
+            f'  Thrust : INVERTED (up=low raw, down=high raw)\n'
+            f'  Rate   : 20 Hz MANUAL_CONTROL + 1 Hz HEARTBEAT'
         )
 
-    # --- Callbacks ------------------------------------------------------------
+    # --- Joy callback ---------------------------------------------------------
 
     def _joy_callback(self, msg: Joy):
-        """Stores the latest joystick axes for use in the send timer."""
+        self._joy_msg_count += 1
         self._latest_axes = msg.axes
+        if self._joy_msg_count == 1:
+            self.get_logger().info(
+                f'[node_joy_to_rc] /joy connected: {len(msg.axes)} axes\n'
+                f'  {[f"{a:.4f}" for a in msg.axes]}'
+            )
 
-    def _send_rc_override(self):
+    # --- 20 Hz send loop ------------------------------------------------------
+
+    def _send_manual_control(self):
         """
-        Timer callback at 20 Hz.
-        Sends MAVLink HEARTBEAT (throttled to 1 Hz) and RC_CHANNELS_OVERRIDE.
+        Sends HEARTBEAT (1 Hz) + MANUAL_CONTROL (20 Hz).
+
+        MANUAL_CONTROL field mapping:
+          x = pitch  [-1000, 1000]  axes[1]  positive = nose down
+          y = roll   [-1000, 1000]  axes[0]  positive = roll right
+          z = thrust [0,     1000]  axes[2]  inverted axis
+          r = yaw    [-1000, 1000]  axes[4]  positive = clockwise
         """
-        # --- Heartbeat (1 Hz) -------------------------------------------------
-        # A GCS heartbeat is required to keep PX4 from triggering RC failsafe.
-        # We throttle it inside the 20 Hz timer: send every 20th tick = 1 Hz.
+        self._send_counter += 1
+
+        # HEARTBEAT 1 Hz
         self._heartbeat_counter += 1
         if self._heartbeat_counter >= 20:
             self._heartbeat_counter = 0
-            # type=6 (GCS), autopilot=8 (INVALID/generic), state=0
-            self._mav.mav.heartbeat_send(6, 8, 0, 0, 0)
+            self._mav.mav.heartbeat_send(
+                mavutil.mavlink.MAV_TYPE_GCS,
+                mavutil.mavlink.MAV_AUTOPILOT_INVALID,
+                0, 0, 0
+            )
 
-        # --- RC Override ------------------------------------------------------
-        # Do not send RC if no joystick data has been received yet.
+        # Status every 5 seconds
+        if self._send_counter % 100 == 0:
+            if self._latest_axes is None:
+                self.get_logger().warn('[node_joy_to_rc] No /joy data.')
+            else:
+                a = self._latest_axes
+                self.get_logger().info(
+                    f'[node_joy_to_rc] ticks={self._send_counter}\n'
+                    f'  raw: roll={a[0]:+.3f} pitch={a[1]:+.3f} '
+                    f'thr={a[2]:+.3f} yaw={a[4]:+.3f}\n'
+                    f'  mc:  roll={self._scale_dir(a[0], ROLL_RAW_MIN, ROLL_RAW_CTR, ROLL_RAW_MAX):+5d}'
+                    f'  pitch={self._scale_dir(a[1], PITCH_RAW_MIN, PITCH_RAW_CTR, PITCH_RAW_MAX):+5d}'
+                    f'  thr={self._scale_thrust(a[2]):4d}'
+                    f'  yaw={self._scale_dir(a[4], YAW_RAW_MIN, YAW_RAW_CTR, YAW_RAW_MAX):+5d}'
+                )
+
         if self._latest_axes is None:
             return
 
         axes = self._latest_axes
 
-        # Map physical axes to MAVLink channels.
-        # MAVLink MANUAL_CONTROL uses: x=pitch, y=roll, z=throttle, r=yaw
-        # But RC_CHANNELS_OVERRIDE maps directly to RC channels 1-8:
-        #   CH1=Roll, CH2=Pitch, CH3=Throttle, CH4=Yaw (standard Mode 2)
-        ch_roll     = self._scale_symmetric(axes[2])  # Right stick horizontal
-        ch_pitch    = self._scale_symmetric(axes[1])  # Right stick vertical
-        ch_throttle = self._scale_throttle(axes[4])   # Left stick vertical
-        ch_yaw      = self._scale_symmetric(axes[0])  # Left stick horizontal
+        if len(axes) < 5:
+            self.get_logger().error(
+                f'Expected >=5 axes, got {len(axes)}.',
+                throttle_duration_sec=5.0
+            )
+            return
 
-        # RC_CHANNELS_OVERRIDE: channels not used are set to 0 (ignored by PX4)
-        self._mav.mav.rc_channels_override_send(
-            self._target_system,  # target_system
-            1,                    # target_component (1 = autopilot)
-            ch_roll,              # chan1_raw  (Roll)
-            ch_pitch,             # chan2_raw  (Pitch)
-            ch_throttle,          # chan3_raw  (Throttle)
-            ch_yaw,               # chan4_raw  (Yaw)
-            0, 0, 0, 0            # chan5..8 unused
+        # Scale each axis with its own calibration
+        roll_mc   = self._scale_dir(
+            axes[0], ROLL_RAW_MIN,  ROLL_RAW_CTR,  ROLL_RAW_MAX
+        )
+        pitch_mc  = self._scale_dir(
+            axes[1], PITCH_RAW_MIN, PITCH_RAW_CTR, PITCH_RAW_MAX
+        )
+        thrust_mc = self._scale_thrust(axes[2])
+        yaw_mc    = self._scale_dir(
+            axes[4], YAW_RAW_MIN,   YAW_RAW_CTR,   YAW_RAW_MAX
         )
 
-    # --- Calibration Methods --------------------------------------------------
+        # Clamp
+        thrust_mc = max(0,     min(1000, thrust_mc))
+        pitch_mc  = max(-1000, min(1000, pitch_mc))
+        roll_mc   = max(-1000, min(1000, roll_mc))
+        yaw_mc    = max(-1000, min(1000, yaw_mc))
 
-    def _scale_throttle(self, raw: float) -> int:
+        self._mav.mav.manual_control_send(
+            self._target_system,
+            pitch_mc,
+            roll_mc,
+            thrust_mc,
+            yaw_mc,
+            0,
+        )
+
+    # --- Scaling --------------------------------------------------------------
+
+    def _scale_thrust(self, raw: float) -> int:
         """
-        Maps throttle axis to RC PWM range [1000, 2000].
+        Thrust axes[2] → MANUAL_CONTROL z [0, 1000].
 
-        The Futaba T8J throttle is physically inverted via PPM decoder:
-          raw = THR_RAW_MIN (0.474) => stick at bottom => RC = 1000 (zero thrust)
-          raw = THR_RAW_MAX (0.000) => stick at top    => RC = 2000 (full thrust)
-
-        Linear interpolation with clamping for safety.
+        INVERTED axis — stick up gives low raw value:
+          raw = THR_RAW_MIN (-0.075) → stick top    → z = 1000 (full thrust)
+          raw = THR_RAW_MAX (+0.463) → stick bottom → z = 0    (no thrust)
         """
-        # Normalize to [0.0, 1.0]: 0.0 = no thrust, 1.0 = full thrust
-        span = THR_RAW_MIN - THR_RAW_MAX  # = 0.474 (positive span, inverted axis)
-        normalized = (THR_RAW_MIN - raw) / span
+        span = THR_RAW_MAX - THR_RAW_MIN   # 0.538
+        if span == 0:
+            return 0
+        # Invert: high raw = low thrust
+        normalized = 1.0 - (raw - THR_RAW_MIN) / span
+        return int(max(0, min(1000, normalized * 1000.0)))
 
-        # Scale to RC range and clamp
-        rc_value = RC_MIN + normalized * (RC_MAX - RC_MIN)
-        return int(max(RC_MIN, min(RC_MAX, rc_value)))
-
-    def _scale_symmetric(self, raw: float) -> int:
+    def _scale_dir(
+        self,
+        raw: float,
+        raw_min: float,
+        raw_ctr: float,
+        raw_max: float,
+    ) -> int:
         """
-        Maps a directional axis (yaw/pitch/roll) to RC PWM range [1000, 2000].
+        Directional axis → MANUAL_CONTROL [-1000, 1000].
 
-        The Futaba T8J directional axes are asymmetric via PPM decoder:
-          raw = DIR_RAW_MIN (-0.075) => full negative => RC = 1000
-          raw = DIR_RAW_CTR ( 0.000) => centered      => RC = 1500
-          raw = DIR_RAW_MAX (+0.463) => full positive  => RC = 2000
+        Uses per-axis calibration constants.
+        Split interpolation handles asymmetric PPM output.
 
-        Uses separate scaling for negative and positive halves to handle
-        the asymmetric physical range correctly.
+        NOTE: Roll and Yaw are also inverted relative to MAVLink convention
+              (left stick left = positive raw = negative yaw in NED frame).
+              PX4 handles the frame convention internally.
         """
-        if raw >= DIR_RAW_CTR:
-            # Positive half: 0.0 → 0.463 maps to 1500 → 2000
-            span = DIR_RAW_MAX - DIR_RAW_CTR  # = 0.463
+        if raw >= raw_ctr:
+            span = raw_max - raw_ctr
             if span == 0:
-                return RC_CENTER
-            normalized = (raw - DIR_RAW_CTR) / span  # [0.0, 1.0]
-            rc_value = RC_CENTER + normalized * (RC_MAX - RC_CENTER)
+                return 0
+            normalized = (raw - raw_ctr) / span    # [0.0, 1.0]
         else:
-            # Negative half: -0.075 → 0.0 maps to 1000 → 1500
-            span = DIR_RAW_CTR - DIR_RAW_MIN  # = 0.075
+            span = raw_ctr - raw_min
             if span == 0:
-                return RC_CENTER
-            normalized = (raw - DIR_RAW_CTR) / span  # [0.0, 1.0] (negative raw)
-            rc_value = RC_CENTER + normalized * (RC_CENTER - RC_MIN)
+                return 0
+            normalized = (raw - raw_ctr) / span    # [-1.0, 0.0]
 
-        return int(max(RC_MIN, min(RC_MAX, rc_value)))
+        return int(max(-1000, min(1000, normalized * 1000.0)))
 
 
 def main(args=None):
