@@ -62,7 +62,12 @@ def launch_setup(context, *args, **kwargs):
 
     # --- Process Definition ---------------------------------------------------
     drone = ExecuteProcess(
-        cmd=['bash', run_script, drone_id, model, pose],
+        cmd=[
+            'gnome-terminal',
+            '--',
+            'bash', '-c',
+            f'bash {run_script} {drone_id} {model} "{pose}"; exec bash'
+        ],
         output='screen',
         name=f'px4_drone_{drone_id}',
     )

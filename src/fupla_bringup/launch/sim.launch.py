@@ -247,7 +247,27 @@ def launch_setup(context, *args, **kwargs):
         ]
     )
 
-    return [dds_agent, qgc, gazebo, master_drone, joy_node, rc_bridge]
+    #7. px4 parameter configurator
+    # delayed 20s px4 must be fully booted before parameter upload.
+    # one-shot node: uploads sitl_params.yaml, saves, then exits.
+    # eliminates manual 'px4> param set'.
+    px4_configurator = TimerAction(
+        period=20.0,
+        actions=[
+            RosNode(
+                package='fupla_joy',
+                executable='node_px4_configurator',
+                name='node_px4_configurator',
+                parameters=[{
+                    'target_system': target_system,
+                    'udp_port':      18571,
+                }],
+                output='screen',
+            )
+        ]
+    )
+
+    return [dds_agent, qgc, gazebo, master_drone, joy_node, rc_bridge, px4_configurator]
 
 
 def generate_launch_description():

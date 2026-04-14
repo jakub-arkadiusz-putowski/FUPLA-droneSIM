@@ -1,0 +1,32 @@
+# config/px4/sitl_params.yaml
+# ==============================================================================
+# FUPLA-droneSIM: PX4 SITL Parameter Configuration
+# ==============================================================================
+# These parameters are automatically uploaded to PX4 on every simulation start
+# via node_px4_configurator.py (MAVLink PARAM_SET protocol).
+#
+# All developers get identical PX4 configuration without manual 'param set'.
+#
+# Format:
+#   PARAM_NAME: value
+#
+# To find parameter names:
+#   pxh> param show <name>
+#   https://docs.px4.io/main/en/advanced_config/parameter_reference.html
+# ==============================================================================
+
+# --- RC / Joystick Input ------------------------------------------------------
+# Accept MAVLink MANUAL_CONTROL as joystick input (required for node_joy_to_rc)
+COM_RC_IN_MODE: 1       # 0=RC only, 1=Joystick only, 2=RC+Joystick
+
+# --- Failsafe Configuration ---------------------------------------------------
+# Prevent immediate disarm when RC signal is briefly lost during SITL testing
+COM_RC_LOSS_T: 3.0      # Seconds before RC loss failsafe triggers (default: 1.0)
+NAV_RCL_ACT: 3          # RC loss action: 3=return to launch
+COM_RCL_EXCEPT: 4       # Ignore RC loss in: 4=manual mode
+
+# --- Simulation Quality of Life -----------------------------------------------
+# Disable preflight checks that are irrelevant in simulation
+COM_PREARM_MODE: 0      # Prearm checks: 0=disabled in SITL
+NAV_DLL_ACT: 0          # disable data link loss failsafe
+COM_RCL_EXCEPT: 7       # ignore rc loss in manual+stabilized+acro

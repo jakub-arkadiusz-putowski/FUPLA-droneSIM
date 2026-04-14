@@ -51,6 +51,7 @@ setup(
             'node_joy_to_rc = fupla_joy.node_joy_to_rc:main',
             'stream_to_qgc  = fupla_joy.stream_to_qgc:main',
             'node_joy_diag = fupla_joy.node_joy_diag:main',
+            'node_px4_configurator = fupla_joy.node_px4_configurator:main',
         ],
     },
 )
