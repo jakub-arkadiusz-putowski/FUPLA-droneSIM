@@ -2,31 +2,33 @@
 # ==============================================================================
 # FUPLA-droneSIM: PX4 SITL Parameter Configuration
 # ==============================================================================
-# These parameters are automatically uploaded to PX4 on every simulation start
-# via node_px4_configurator.py (MAVLink PARAM_SET protocol).
+# Automatically uploaded on every simulation start via node_px4_configurator.
+# No manual 'pxh> param set' commands required.
 #
-# All developers get identical PX4 configuration without manual 'param set'.
+# Type rules (critical — wrong type causes incorrect values in PX4):
+#   INT32 parameters  → integer literal without decimal point  (e.g. 1)
+#   REAL32 parameters → float literal with decimal point       (e.g. 3.0)
 #
-# Format:
-#   PARAM_NAME: value
-#
-# To find parameter names:
-#   pxh> param show <name>
-#   https://docs.px4.io/main/en/advanced_config/parameter_reference.html
+# Reference: https://docs.px4.io/main/en/advanced_config/parameter_reference.html
 # ==============================================================================
 
+# --- MAVLink System ID --------------------------------------------------------
+# Must match target_system in node_joy_to_rc and node_px4_configurator.
+# PX4 SITL default: instance_id + 1 → drone 1 = MAV_SYS_ID 2
+# If this changes, update default_value='2' in sim.launch.py accordingly.
+MAV_SYS_ID: 2
+
 # --- RC / Joystick Input ------------------------------------------------------
-# Accept MAVLink MANUAL_CONTROL as joystick input (required for node_joy_to_rc)
+# Required for node_joy_to_rc to control the drone via MAVLink MANUAL_CONTROL.
 COM_RC_IN_MODE: 1       # 0=RC only, 1=Joystick only, 2=RC+Joystick
 
 # --- Failsafe Configuration ---------------------------------------------------
-# Prevent immediate disarm when RC signal is briefly lost during SITL testing
+# Tuned for SITL testing — prevents unwanted disarms during development.
 COM_RC_LOSS_T: 3.0      # Seconds before RC loss failsafe triggers (default: 1.0)
 NAV_RCL_ACT: 3          # RC loss action: 3=return to launch
-COM_RCL_EXCEPT: 4       # Ignore RC loss in: 4=manual mode
+COM_RCL_EXCEPT: 7       # Ignore RC loss in manual+stabilized+acro modes
+NAV_DLL_ACT: 0          # Disable data link loss failsafe
 
-# --- Simulation Quality of Life -----------------------------------------------
-# Disable preflight checks that are irrelevant in simulation
-COM_PREARM_MODE: 0      # Prearm checks: 0=disabled in SITL
-NAV_DLL_ACT: 0          # disable data link loss failsafe
-COM_RCL_EXCEPT: 7       # ignore rc loss in manual+stabilized+acro
+# --- Arming -------------------------------------------------------------------
+COM_PREARM_MODE: 0      # Disable prearm checks (irrelevant in SITL)
+COM_ARM_WO_GPS: 1       # Allow arming without GPS fix
