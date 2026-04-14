@@ -263,6 +263,9 @@ cd "$REPO_ROOT"
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 
+#source the workspace immediately after build
+source "$REPO_ROOT/install/setup.bash"
+
 # Add workspace overlay to .bashrc (idempotent)
 SETUP_LINE="source $REPO_ROOT/install/setup.bash"
 if ! grep -q "$SETUP_LINE" ~/.bashrc; then

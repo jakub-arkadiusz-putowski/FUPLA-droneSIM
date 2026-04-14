@@ -20,13 +20,20 @@ PX4 SITL, and Gazebo.
 ## Installation
 
 ```bash
+cd ~
 git clone --recursive https://github.com/jakub-arkadiusz-putowski/FUPLA-droneSIM.git
 cd FUPLA-droneSIM
 bash tools/install.sh
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install
+source install/setup.bash
 ```
 
 Open a **new terminal** after installation completes.
 
+```bash
+ros2 launch fupla_bringup sim.launch.py
+```
 > **Note:** If you use a USB joystick (Futaba T8J), log out and back in
 > after installation for the `dialout` group change to take effect.
 
