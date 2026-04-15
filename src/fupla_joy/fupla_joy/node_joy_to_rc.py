@@ -76,6 +76,8 @@ class JoyToRcNode(Node):
         self._target_system = self.get_parameter('target_system').value
         self._udp_port      = self.get_parameter('udp_port').value
 
+        self.add_on_set_parameters_callback(self._on_parameters_changed)
+
         # --- MAVLink ----------------------------------------------------------
         connection_str = f'udpout:127.0.0.1:{self._udp_port}'
         self.get_logger().info(
@@ -243,6 +245,34 @@ class JoyToRcNode(Node):
             normalized = (raw - raw_ctr) / span    # [-1.0, 0.0]
 
         return int(max(-1000, min(1000, normalized * 1000.0)))
+    
+    def _on_parameters_changed(self, params):
+        """
+        called by ros2 when parameters are changed externally
+        (e.g. by node_swarm_gui via SetParameters service)
+        reconnects MAVLink to new target drone
+        """
+        from rcl_interfaces.msg import SetParametersResult
+
+        for param in params:
+            if param.name == 'target_system':
+                self._target_system = param.value
+                self.get_logger().info(
+                    f'[node_joy_to_rc] target_system -> {self._target_system}'
+                )
+            elif param.name == 'udp_port':
+                self._udp_port = param.value
+                # reconnect MAVLink to new port
+                connection_str = f'udpout:127.0.0.1:{self._udp_port}'
+                self._mav = mavutil.mavlink_connection(
+                    connection_str,
+                    source_system=255,
+                    source_component=191,
+                )
+                self.get_logger().info(
+                    f'[node_joy_to_rc] reconnected -> {connection_str}'
+                )
+        return SetParametersResult(successful=True)
 
 
 def main(args=None):

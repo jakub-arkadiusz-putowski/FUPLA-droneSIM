@@ -132,7 +132,15 @@ def launch_setup(context, *args, **kwargs):
         name=f'px4_drone_{drone_id}',
     )
 
-    return [drone]
+    from launch_ros.actions import Node as RosNode
+    swarm_gui = RosNode(
+        package='fupla_joy',
+        executable='node_swarm_gui',
+        name='node_swarm_gui',
+        output='screen',
+    )
+
+    return [drone, swarm_gui]
 
 
 def generate_launch_description():
