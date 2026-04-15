@@ -232,7 +232,7 @@ def launch_setup(context, *args, **kwargs):
     #      pxh> param set COM_RC_IN_MODE 1
     #      pxh> param save
     rc_bridge = TimerAction(
-        period=15.0,
+        period=30.0,
         actions=[
             RosNode(
                 package='fupla_joy',
@@ -252,7 +252,7 @@ def launch_setup(context, *args, **kwargs):
     # one-shot node: uploads sitl_params.yaml, saves, then exits.
     # eliminates manual 'px4> param set'.
     px4_configurator = TimerAction(
-        period=20.0,
+        period=35.0,
         actions=[
             RosNode(
                 package='fupla_joy',
